@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net48</TargetFramework>
+		<LangVersion>8.0</LangVersion>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="fab.csv" />
+	  <None Remove="feet.simtype_bxml" />
+	  <None Remove="hands.simtype_bxml" />
+	  <None Remove="head.simtype_bxml" />
+	  <None Remove="legs.simtype_bxml" />
+	  <None Remove="torso.simtype_bxml" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <EmbeddedResource Include="fab.csv" />
+	  <EmbeddedResource Include="feet.simtype_bxml" />
+	  <EmbeddedResource Include="hands.simtype_bxml" />
+	  <EmbeddedResource Include="head.simtype_bxml" />
+	  <EmbeddedResource Include="legs.simtype_bxml" />
+	  <EmbeddedResource Include="torso.simtype_bxml" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="IndexRange" Version="1.0.0" />
+		<PackageReference Include="System.Memory" Version="4.5.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="System.IO.Compression" />
+	</ItemGroup>
+
+</Project>
