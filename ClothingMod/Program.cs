@@ -146,21 +146,36 @@ namespace ClothingMod
             ReadOnlySpan<byte> bytes = File.ReadAllBytes(AssetInfosBin);
             var fileIds = bytes.Read<int>(0);
             var buffer = new byte[bytes.Length + _assets.Sum(x => $"{x.Id}.simtype_bxml".Length + 6 + $"{x.Id}.bundle".Length + 6 + $"{x.Bundle2Id}.bundle".Length + 6)];
+            var assetInfos = new (uint fileId, byte flag, byte len, byte[] name)[fileIds + _assets.Length * 3];
             var offset = 8;
-            for (int i = 0; i < fileIds; i++)
+            int i = 0;
+            for (; i < fileIds; i++)
             {
-                offset += 5;
-                offset += bytes[offset] + 1;
+                var fileId = bytes.Read<uint>(offset);
+                var flag = bytes[offset + 4];
+                var len = bytes[offset + 5];
+                var name = bytes.Slice(offset + 6, len).ToArray();//.ToArray();
+                assetInfos[i] = (fileId, flag, len, name);
+                offset += 6 + len;
             }
-            bytes[..offset].CopyTo(buffer);
+            foreach (var (fileId, name) in _assets.SelectMany(a => new[] { (a.Id, $"{a.Id}.simtype_bxml"), (a.BundleId, $"{a.Id}.bundle"), (a.Bundle2Id, $"{a.Bundle2Id}.bundle") }))
+            {
+                var flag = (byte)(name.EndsWith("simtype_bxml") ? 148 : 156);
+                var len = (byte)name.Length;
+
+                assetInfos[i++] = (fileId, flag, len, Encoding.UTF8.GetBytes(name));
+            }
+            Array.Sort(assetInfos, (x, y) => x.fileId.CompareTo(y.fileId));
             var hashes = bytes[offset..];
             buffer.Write(0, fileIds + _assets.Length * 3);
-            foreach (var (id, name) in _assets.SelectMany(a => new[] { (a.Id, $"{a.Id}.simtype_bxml"), (a.BundleId, $"{a.Id}.bundle"), (a.Bundle2Id, $"{a.Bundle2Id}.bundle")}))
+            buffer.Write(4, bytes.Read<uint>(4));
+            offset = 8;
+            foreach (var (fileId, flag, len, name) in assetInfos)
             {
-                buffer.Write(offset, id);
-                buffer[offset + 4] = 0x94;
-                buffer[offset + 5] = (byte)name.Length;
-                Encoding.UTF8.GetBytes(name).CopyTo(buffer, offset + 6);
+                buffer.Write(offset, fileId);
+                buffer[offset + 4] = flag;
+                buffer[offset + 5] = len;
+                name.CopyTo(buffer, offset + 6);
                 offset += 6 + name.Length;
             }
             hashes.CopyTo(buffer.AsSpan(offset));
