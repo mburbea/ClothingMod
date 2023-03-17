@@ -16,6 +16,7 @@ namespace ClothingMod
         private static readonly string SimTypeInit = Path.Combine(ScratchDir, "simtype_init.bin");
         private static readonly string KsmtBatch = Path.Combine(ScratchDir, "134225858_ksmt.batch");
         private static readonly string AssetInfosBin = Path.Combine(ScratchDir, "assetinfos.bin");
+        private static readonly string LocalizationBin = Path.Combine(ScratchDir, "locatexts_en_us.koalocatext_base");
 
         private static readonly byte[][] FabData = typeof(Fab).GetEnumNames()
             .Select(name => Assembly.GetExecutingAssembly().GetManifestResourceStream($"{typeof(Program).Namespace}.{name.ToLowerInvariant()}.simtype_bxml").ReadAllBytes())
@@ -26,6 +27,92 @@ namespace ClothingMod
             .Skip(1)
             .Select(line => line.Split(','))
             .ToDictionary(res => res[1], res => uint.Parse(res[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture), StringComparer.OrdinalIgnoreCase);
+
+        private static List<(ulong, string)> Localization = new List<(ulong, string)>();
+
+
+
+        public static void InitLocalization()
+        {
+            ReadOnlySpan<byte> data = File.ReadAllBytes(LocalizationBin);
+            var count = data.Read<uint>(0);
+
+            var sizes = new List<int>();
+            var begin = data.Read<int>(4);
+            var end = 0;
+
+            int offset = 8;
+
+            for (uint i = 0; i < count - 1; i++)
+            {
+                end = data.Read<int>(offset);
+                offset += 4;
+                sizes.Add(end - begin - 1);
+                begin = end;
+            }
+
+            sizes.Add(data.Length - begin - 1);
+
+            for (uint i = 0; i < count; i++)
+            {
+                Localization.Add((data.Read<ulong>(offset), ""));
+                offset += 8;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                offset++;
+                Localization[i] = (Localization[i].Item1, Encoding.UTF8.GetString(data.Slice(offset, sizes[i] - 1).ToArray()));
+                offset += sizes[i];
+            }
+            return;
+        }
+
+        public static void WriteLocalization()
+        {
+            File.Delete(LocalizationBin);
+            var stream = new FileStream(LocalizationBin, FileMode.Create);
+            var writer = new BinaryWriter(stream);
+
+            writer.Write(Localization.Count);
+
+            int begin = 4 + (Localization.Count * (4 + 8));
+            writer.Write(begin);
+            
+            for (int i = 1; i < Localization.Count; i++)
+            {
+                var bytes = Encoding.UTF8.GetBytes(Localization[i - 1].Item2);
+                begin += (1 + bytes.Length + 1);
+                writer.Write(begin);
+            }
+
+            for (int i = 0; i < Localization.Count; i++)
+            {
+                writer.Write(Localization[i].Item1);
+            }
+
+            for (int i = 0; i < Localization.Count; i++)
+            {
+                writer.Write((byte)17);
+                writer.Write(Encoding.UTF8.GetBytes(Localization[i].Item2));
+                writer.Write((byte)0);
+            }
+
+            writer.Close();
+            stream.Close();
+            return;
+        }
+
+        public static ulong AddLocalizationText(string text)
+        {
+            ulong key = 0;
+            if (Localization.Count > 0)
+            {
+                key = Localization.Last().Item1 + 1;
+            }
+            Localization.Add((key, text));
+            return key;
+        }
 
         public Program()
         {
@@ -39,34 +126,35 @@ namespace ClothingMod
 
         private readonly SimTypeAsset[] _assets = new []
         {
-            BuildTable("splinter_02_melee_Set_Unique_", "splinter_02_melee_Set_Unique_f_","glowing_warrior_"),
-            BuildTable("splinter_03_Rogue_Set_Unique_", "splinter_03_Rogue_Set_Unique_f_", "glowing_rogue_"),
-            BuildTable("01_generic_male_peasant_", "01_generic_peasant_female_", "Clothing_peasant03_"),
-            BuildTable("01_Dokkalfar_noble_male_", "01_Dokkalfar_noble_female_", "Clothing_peasant04_"),
-            BuildTable("02_Dokkalfar_noble_male_", "02_Dokkalfar_noble_female_", "Clothing_peasant05_"),
-            BuildTable("01_Dokkalfar_peasant_male_", "01_Dokkalfar_peasant_female_", "Clothing_peasant06_"),
-            BuildTable("02_Dokkalfar_peasant_male_", "02_Dokkalfar_peasant_female_", "Clothing_peasant07_"),
-            BuildTable("01_Dokkalfar_merchant_male_", "01_Dokkalfar_merchant_female_", "Clothing_peasant08_"),
-            BuildTable("02_Dokkalfar_merchant_male_", "02_Dokkalfar_merchant_female_", "Clothing_peasant09_"),
+            BuildTable("splinter_02_melee_Set_Unique_", "splinter_02_melee_Set_Unique_f_","glowing_warrior_", "Glowing Warrior "),
+            BuildTable("splinter_03_Rogue_Set_Unique_", "splinter_03_Rogue_Set_Unique_f_", "glowing_rogue_", "Glowing Rogue "),
 
-            BuildTable("01_Ljosalfar_noble_male_", "01_Ljosalfar_noble_female_", "Clothing_peasant10_"),
-            BuildTable("02_Ljosalfar_noble_male_", "02_Ljosalfar_noble_female_", "Clothing_peasant11_"),
-            BuildTable("01_Ljosalfar_peasant_male_", "01_Ljosalfar_peasant_female_", "Clothing_peasant12_"),
-            BuildTable("02_Ljosalfar_peasant_male_", "02_Ljosalfar_peasant_female_", "Clothing_peasant13_"),
-            BuildTable("01_Ljosalfar_merchant_male_", "01_Ljosalfar_Merchant_f_", "Clothing_peasant14_"),
-            BuildTable("02_Ljosalfar_merchant_male_", "02_Ljosalfar_Merchant_f_", "Clothing_peasant15_"),
+            BuildTable("01_generic_male_peasant_", "01_generic_peasant_female_", "Clothing_peasant03_", "Generic Peasant "),
+            BuildTable("01_Dokkalfar_noble_male_", "01_Dokkalfar_noble_female_", "Clothing_peasant04_", "Dokkalfar Noble "),
+            BuildTable("02_Dokkalfar_noble_male_", "02_Dokkalfar_noble_female_", "Clothing_peasant05_", "Dokkalfar Alt Noble "),
+            BuildTable("01_Dokkalfar_peasant_male_", "01_Dokkalfar_peasant_female_", "Clothing_peasant06_", "Dokkalfar Peasant "),
+            BuildTable("02_Dokkalfar_peasant_male_", "02_Dokkalfar_peasant_female_", "Clothing_peasant07_", "Dokkalfar Alt Peasant "),
+            BuildTable("01_Dokkalfar_merchant_male_", "01_Dokkalfar_merchant_female_", "Clothing_peasant08_", "Dokkalfar Merchant "),
+            BuildTable("02_Dokkalfar_merchant_male_", "02_Dokkalfar_merchant_female_", "Clothing_peasant09_", "Dokkalfar Alt Merchant "),
 
-            BuildTable("01_almain_merchant_male_", "01_almain_Merchant_female_", "Clothing_peasant16_"),
-            BuildTable("02_almain_merchant_male_", "02_almain_Merchant_female_", "Clothing_peasant17_"),
-            BuildTable("01_varani_merchant_male_", "01_varani_Merchant_female_", "Clothing_peasant18_"),
-            BuildTable("02_varani_merchant_male_", "02_varani_Merchant_female_", "Clothing_peasant19_"),
-            BuildTable("01_almain_noble_male_", "01_almain_noble_female_", "Clothing_peasant20_"),
-            BuildTable("02_almain_noble_male_", "02_almain_noble_female_", "Clothing_peasant21_"),
-            BuildTable("01_varani_noble_male_", "01_varani_noble_female_", "Clothing_peasant22_"),
-            BuildTable("02_varani_noble_male_", "02_varani_noble_female_", "Clothing_peasant23_"),
+            BuildTable("01_Ljosalfar_noble_male_", "01_Ljosalfar_noble_female_", "Clothing_peasant10_", "Ljosalfar Noble "),
+            BuildTable("02_Ljosalfar_noble_male_", "02_Ljosalfar_noble_female_", "Clothing_peasant11_", "Ljosalfar Alt Noble "),
+            BuildTable("01_Ljosalfar_peasant_male_", "01_Ljosalfar_peasant_female_", "Clothing_peasant12_", "Ljosalfar Peasant "),
+            BuildTable("02_Ljosalfar_peasant_male_", "02_Ljosalfar_peasant_female_", "Clothing_peasant13_", "Ljosalfar Alt Peasant "),
+            BuildTable("01_Ljosalfar_merchant_male_", "01_Ljosalfar_Merchant_f_", "Clothing_peasant14_", "Ljosalfar Merchant "),
+            BuildTable("02_Ljosalfar_merchant_male_", "02_Ljosalfar_Merchant_f_", "Clothing_peasant15_", "Ljosalfar Alt Merchant "),
+
+            BuildTable("01_almain_merchant_male_", "01_almain_Merchant_female_", "Clothing_peasant16_", "Almain Merchant "),
+            BuildTable("02_almain_merchant_male_", "02_almain_Merchant_female_", "Clothing_peasant17_", "Almain Alt Merchant "),
+            BuildTable("01_varani_merchant_male_", "01_varani_Merchant_female_", "Clothing_peasant18_", "Verani Merchant "),
+            BuildTable("02_varani_merchant_male_", "02_varani_Merchant_female_", "Clothing_peasant19_", "Verani Alt Merchant "),
+            BuildTable("01_almain_noble_male_", "01_almain_noble_female_", "Clothing_peasant20_", "Almain Noble "),
+            BuildTable("02_almain_noble_male_", "02_almain_noble_female_", "Clothing_peasant21_", "Almain Alt Noble "),
+            BuildTable("01_varani_noble_male_", "01_varani_noble_female_", "Clothing_peasant22_", "Verani Noble "),
+            BuildTable("02_varani_noble_male_", "02_varani_noble_female_", "Clothing_peasant23_", "Verani Alt Noble "),
         }.SelectMany(x => x).ToArray();
 
-        private static SimTypeAsset CreateModifiedSimType(Fab fab, string maleName, string femaleName, string baseSimName)
+        private static SimTypeAsset CreateModifiedSimType(Fab fab, string maleName, string femaleName, string baseSimName, string displayName)
         {
             var bytes = FabData[(int)fab].ToArray();
             var ix = bytes.AsSpan().IndexOf(new byte[8] { 0x06, 0, 0, 0, 0x07, 0, 0, 0 });
@@ -93,7 +181,20 @@ namespace ClothingMod
             bundleBytes.Write(16, maleId);
             bundleBytes.Write(20, femaleId);
             bundleBytes.Write(24, 0x00_00_10_10);
-            return new SimTypeAsset(name, bytes, bundleBytes);
+            return new SimTypeAsset(name, $"{displayName}{(FabDisplayName)fab}", bytes, bundleBytes);
+        }
+
+        private void PostProcessAssets()
+        {
+            ReadOnlySpan<byte> bytes = File.ReadAllBytes(KsmtBatch);
+            int entryCount = bytes.Read<int>(0);
+            uint lastID = bytes.Read<uint>(4 + ((entryCount - 1) * 8));
+            foreach (var asset in _assets)
+            {
+                lastID++;
+                asset.Id = lastID;
+                asset.Bytes.Write<ulong>(8, AddLocalizationText(asset.DisplayName));
+            }
         }
 
         private void BuildSimtypeInit()
@@ -111,7 +212,7 @@ namespace ClothingMod
             foreach (var asset in _assets)
             {
                 buffer.Write(eol1, asset.Id);
-                buffer.Write(eol2, asset.Id);
+                buffer.Write(eol2, asset.Hash);
                 eol1 += 4;
                 eol2 += 4;
             }
@@ -213,9 +314,9 @@ namespace ClothingMod
             File.Delete(listPath);
         }
 
-        private static IEnumerable<SimTypeAsset> BuildTable(string maleName, string femaleName, string baseSimType = "Clothing_peasant03_")
+        private static IEnumerable<SimTypeAsset> BuildTable(string maleName, string femaleName, string baseSimType, string displayName)
         => ((Fab[])typeof(Fab).GetEnumValues())
-                .Select(x => CreateModifiedSimType(x, maleName, femaleName, baseSimType))
+                .Select(x =>CreateModifiedSimType(x, maleName, femaleName, baseSimType, displayName))
                 .Where(x => x != null);
 
 
@@ -245,10 +346,13 @@ namespace ClothingMod
         {
             BackupOrRestore();
             Unpack();
+            InitLocalization();
+            PostProcessAssets();
             BuildSimtypeInit();
             BuildKsmtBatch();
             BuildAssetInfosBin();
             WriteBundles();
+            WriteLocalization();
             Pack();
         }
 
